@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>설비 정지시간 기록 및 분석</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #F97316; }
+        .main-container-bg { background: linear-gradient(160deg, #F97316 0%, #EA580C 100%); }
+        .control-panel { opacity: 0; visibility: hidden; transition: all 0.3s ease; }
+        .group:hover .control-panel, .group:focus-within .control-panel { opacity: 1; visibility: visible; }
+        .filter-btn-active { background-color: #F97316 !important; color: white !important; box-shadow: 0 4px 12px -1px rgb(249 115 22 / 0.4); }
+    </style>
+</head>
+<body class="main-container-bg min-h-screen p-4 md:p-6 lg:p-8">
+
+    <div class="max-w-7xl mx-auto space-y-8">
+        
+        <header class="relative group text-center mb-4">
+            <img id="logo" src="https://via.placeholder.com/200x60/FFFFFF/F97316?text=LOGO" class="mx-auto h-16 object-contain" alt="logo">
+            <div class="control-panel absolute top-0 right-0 p-2 bg-white/50 backdrop-blur-sm rounded-lg shadow-md">
+                <label for="logoUpload" class="cursor-pointer bg-orange-500 text-white px-2 py-1 rounded-md text-xs hover:bg-orange-600">로고 변경</label>
+                <input type="file" id="logoUpload" class="hidden" accept="image/*">
+                <div class="flex items-center mt-2"><label for="logoHeight" class="text-xs mr-1">크기:</label><input type="range" id="logoHeight" min="20" max="150" value="64" class="w-24 h-1"></div>
+            </div>
+
+            <div class="relative group mt-2">
+                <h1 id="mainTitle" class="text-3xl font-bold text-white inline-block" contenteditable="true">설비 정지시간 분석</h1>
+                 <div class="control-panel absolute -bottom-14 left-1/2 -translate-x-1/2 w-72 p-2 bg-white/80 backdrop-blur-sm rounded-lg shadow-xl z-10">
+                    <div class="flex justify-between items-center gap-2 text-sm">
+                        <select id="fontFamily" class="w-1/3 border border-gray-200 rounded-md p-1 text-xs"><option value="Noto Sans KR, sans-serif">기본</option><option value="serif">명조</option><option value="monospace">고정폭</option></select>
+                        <input type="color" id="fontColor" value="#ffffff" class="w-1/4 h-8 border-none bg-transparent">
+                        <div class="w-1/3 flex items-center"><input type="range" id="fontSize" min="16" max="64" value="30" class="w-full"><span id="fontSizeValue" class="text-xs ml-1">30</span></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            
+            <div class="lg:col-span-2">
+                <div class="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg">
+                    <h2 class="text-xl font-bold text-gray-700 mb-5">기록 추가</h2>
+                    <form id="downtimeForm" class="space-y-4">
+                        <div class="flex items-center bg-gray-50 p-3 rounded-lg border border-gray-200"><span class="material-icons-outlined text-gray-500 mr-3">calendar_today</span><input type="date" id="date" class="bg-transparent w-full outline-none text-gray-700"></div>
+                        <div class="flex items-center bg-gray-50 p-3 rounded-lg border border-gray-200"><span class="material-icons-outlined text-gray-500 mr-3">precision_manufacturing</span><input type="text" id="equipment" list="equipmentList" class="bg-transparent w-full outline-none text-gray-700" placeholder="설비명"></div><datalist id="equipmentList"></datalist>
+                        <div class="flex items-center bg-gray-50 p-3 rounded-lg border border-gray-200"><span class="material-icons-outlined text-gray-500 mr-3">person</span><input type="text" id="person" list="personList" class="bg-transparent w-full outline-none text-gray-700" placeholder="담당자"></div><datalist id="personList"></datalist>
+                        <div class="flex items-center bg-gray-50 p-3 rounded-lg border border-gray-200"><span class="material-icons-outlined text-gray-500 mr-3">error_outline</span><input type="text" id="symptom" class="bg-transparent w-full outline-none text-gray-700" placeholder="고장 증상"></div>
+                        <div class="flex items-center bg-gray-50 p-3 rounded-lg border border-gray-200"><span class="material-icons-outlined text-gray-500 mr-3">timer</span><input type="number" id="downtime" class="bg-transparent w-full outline-none text-gray-700" placeholder="정지 시간 (분)"></div>
+                        <button type="submit" class="w-full bg-orange-500 text-white font-bold py-3 px-4 rounded-xl hover:bg-orange-600 active:scale-95 transition-all duration-150 shadow-lg hover:shadow-xl">저장하기</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="lg:col-span-3 lg:row-span-2">
+                <div class="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg h-full flex flex-col">
+                    <h2 class="text-xl font-bold text-gray-700 mb-4">통계 분석</h2>
+                     <div id="filterButtons" class="flex flex-wrap gap-2 mb-4">
+                        <button class="filter-btn px-3 py-1.5 rounded-full text-xs font-semibold" data-filter="equipment">설비별</button>
+                        <button class="filter-btn px-3 py-1.5 rounded-full text-xs font-semibold" data-filter="person">담당자별</button>
+                        <button class="filter-btn px-3 py-1.5 rounded-full text-xs font-semibold" data-filter="time">시간별</button>
+                        <button class="filter-btn px-3 py-1.5 rounded-full text-xs font-semibold" data-filter="day">일별</button>
+                        <button class="filter-btn px-3 py-1.5 rounded-full text-xs font-semibold" data-filter="dayOfWeek">요일별</button>
+                        <button class="filter-btn px-3 py-1.5 rounded-full text-xs font-semibold" data-filter="week">주별</button>
+                        <button class="filter-btn px-3 py-1.5 rounded-full text-xs font-semibold" data-filter="month">월별</button>
+                        <button class="filter-btn px-3 py-1.5 rounded-full text-xs font-semibold" data-filter="quarter">분기별</button>
+                        <button class="filter-btn px-3 py-1.5 rounded-full text-xs font-semibold" data-filter="year">연도별</button>
+                     </div>
+                    <div class="relative flex-grow min-h-[300px]">
+                        <canvas id="downtimeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2">
+                <div class="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg">
+                     <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold text-gray-700">전체 기록</h2><button id="deleteAllBtn" class="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition-colors"><span class="material-icons-outlined text-sm">delete_sweep</span>전체 삭제</button></div>
+                    <div id="dataTableContainer" class="w-full max-h-[400px] overflow-y-auto pr-2">
+                        <table class="w-full text-sm text-left"><thead class="text-gray-500 font-medium sticky top-0 bg-white/80 backdrop-blur-sm"><tr><th class="py-3 px-2">설비명/날짜</th><th class="py-3 px-2">시간(분)</th><th class="py-3 px-2">담당자</th><th class="py-3 px-2 text-center">삭제</th></tr></thead><tbody id="dataTable"></tbody></table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+    
+    <script>
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_AUTH_DOMAIN",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_STORAGE_BUCKET",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const downtimeCollection = db.collection('downtimeRecords');
+
+    let downtimeChart, allRecords = [], currentFilter = 'equipment';
+    const logo = document.getElementById('logo'), logoUpload = document.getElementById('logoUpload'), logoHeight = document.getElementById('logoHeight'), mainTitle = document.getElementById('mainTitle'), fontFamily = document.getElementById('fontFamily'), fontColor = document.getElementById('fontColor'), fontSize = document.getElementById('fontSize'), fontSizeValue = document.getElementById('fontSizeValue'), form = document.getElementById('downtimeForm'), dateInput = document.getElementById('date'), equipmentList = document.getElementById('equipmentList'), personList = document.getElementById('personList'), dataTable = document.getElementById('dataTable'), filterButtons = document.getElementById('filterButtons'), deleteAllBtn = document.getElementById('deleteAllBtn');
+    
+    downtimeCollection.orderBy("createdAt", "desc").onSnapshot(snapshot => { allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); renderTable(); updateChart(); updateDatalists(); }, error => console.error("데이터 로딩 오류: ", error));
+
+    function renderTable() { dataTable.innerHTML = allRecords.length === 0 ? `<tr><td colspan="4" class="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr>` : allRecords.map(record => ` <tr class="border-b border-gray-100 hover:bg-orange-50 transition-colors"> <td class="py-3 px-2"><div class="font-semibold text-gray-800">${record.equipment}</div><div class="text-xs text-gray-500">${record.date}</div></td> <td class="py-3 px-2 font-bold text-orange-600">${record.downtime}</td> <td class="py-3 px-2 text-gray-600">${record.person}</td> <td class="py-3 px-2 text-center"><button class="delete-btn text-gray-400 hover:text-red-500 transition-colors" data-id="${record.id}"><span class="material-icons-outlined text-xl">delete</span></button></td> </tr> `).join(''); }
+    function updateDatalists() { const equipments = [...new Set(allRecords.map(r => r.equipment))]; const people = [...new Set(allRecords.map(r => r.person))]; equipmentList.innerHTML = equipments.map(e => `<option value="${e}"></option>`).join(''); personList.innerHTML = people.map(p => `<option value="${p}"></option>`).join(''); }
+    function updateChart() { const { labels, data, title } = getChartData(currentFilter); if (downtimeChart) downtimeChart.destroy(); downtimeChart = new Chart(document.getElementById('downtimeChart').getContext('2d'), { type: 'bar', data: { labels, datasets: [{ label: '총 정지시간 (분)', data, backgroundColor: 'rgba(249, 115, 22, 0.7)', borderColor: 'rgba(249, 115, 22, 1)', borderWidth: 2, borderRadius: 8, barPercentage: 0.6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: true, text: title, font: { size: 16, weight: 'bold' }, color: '#374151' } }, scales: { y: { beginAtZero: true, grid: { color: '#e5e7eb' } }, x: { grid: { display: false } } } } }); }
+
+    function getChartData(filter) {
+        const dataMap = new Map(); let title = ''; const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+        const getWeek = d => { const date = new Date(d); date.setHours(0, 0, 0, 0); date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7); const week1 = new Date(date.getFullYear(), 0, 4); return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7); };
+        allRecords.forEach(r => {
+            const d = parseInt(r.downtime) || 0; let key; const date = r.createdAt && r.createdAt.toDate ? r.createdAt.toDate() : new Date(r.date);
+            switch (filter) {
+                case 'equipment': title = '설비별'; key = r.equipment; break;
+                case 'person': title = '담당자별'; key = r.person; break;
+                // 🔴 시간별 로직 추가
+                case 'time': title = '시간별'; key = `${date.getHours().toString().padStart(2, '0')}:00`; break;
+                case 'day': title = '일별'; key = r.date; break;
+                case 'dayOfWeek': title = '요일별'; key = `${date.getDay()}-${dayNames[date.getDay()]}요일`; break;
+                case 'week': title = '주별'; key = `${date.getFullYear()}-W${getWeek(date).toString().padStart(2, '0')}`; break;
+                case 'month': title = '월별'; key = r.date.substring(0, 7); break;
+                case 'quarter': title = '분기별'; key = `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`; break;
+                case 'year': title = '연도별'; key = date.getFullYear().toString(); break;
+            }
+            if(key) dataMap.set(key, (dataMap.get(key) || 0) + d);
+        });
+        const sortedData = [...dataMap.entries()].sort((a, b) => a[0].localeCompare(b[0], undefined, {numeric: true}));
+        return { labels: sortedData.map(item => item[0]), data: sortedData.map(item => item[1]), title: `${title} 정지시간 분석` };
+    }
+
+    form.addEventListener('submit', e => { e.preventDefault(); 
+        // 🔴 시간별 분석을 위해 저장 시 타임스탬프 추가
+        const newRecord = { 
+            date: dateInput.value, 
+            equipment: document.getElementById('equipment').value.trim(), 
+            person: document.getElementById('person').value.trim(), 
+            symptom: document.getElementById('symptom').value.trim(), 
+            downtime: parseInt(document.getElementById('downtime').value) || 0,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }; 
+        if (!newRecord.date || !newRecord.equipment || !newRecord.person || !newRecord.downtime) { alert('필수 항목을 모두 입력해주세요.'); return; } 
+        downtimeCollection.add(newRecord).then(() => form.reset()).catch(err => console.error("저장 오류: ", err)); 
+    });
+
+    document.getElementById('dataTableContainer').addEventListener('click', e => { const b = e.target.closest('.delete-btn'); if (b && confirm('이 기록을 삭제하시겠습니까?')) downtimeCollection.doc(b.dataset.id).delete().catch(err => console.error("삭제 오류:", err)); });
+    deleteAllBtn.addEventListener('click', () => { if (allRecords.length === 0 || !confirm(`총 ${allRecords.length}개의 기록을 모두 삭제하시겠습니까?`)) return; const batch = db.batch(); allRecords.forEach(r => batch.delete(downtimeCollection.doc(r.id))); batch.commit().catch(err => console.error("전체 삭제 오류:", err)); });
+    filterButtons.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') { currentFilter = e.target.dataset.filter; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('filter-btn-active')); e.target.classList.add('filter-btn-active'); updateChart(); } });
+    
+    function applySettings() { logo.src = localStorage.getItem('logoSrc') || 'https://via.placeholder.com/200x60/FFFFFF/F97316?text=LOGO'; logo.style.height = (localStorage.getItem('logoHeight') || '64') + 'px'; logoHeight.value = localStorage.getItem('logoHeight') || '64'; mainTitle.innerText = localStorage.getItem('mainTitle') || '설비 정지시간 분석'; const styles = JSON.parse(localStorage.getItem('titleStyles')) || {}; mainTitle.style.fontFamily = styles.fontFamily || 'Noto Sans KR, sans-serif'; mainTitle.style.color = styles.color || '#ffffff'; mainTitle.style.fontSize = (styles.fontSize || '30') + 'px'; fontFamily.value = styles.fontFamily || 'Noto Sans KR, sans-serif'; fontColor.value = styles.color || '#ffffff'; fontSize.value = styles.fontSize || '30'; fontSizeValue.innerText = styles.fontSize || '30'; }
+    function saveTitleStyles() { const styles = { fontFamily: fontFamily.value, color: fontColor.value, fontSize: fontSize.value }; localStorage.setItem('titleStyles', JSON.stringify(styles)); applySettings(); }
+    logoUpload.addEventListener('change', e => { if (e.target.files && e.target.files[0]) { const reader = new FileReader(); reader.onload = event => { localStorage.setItem('logoSrc', event.target.result); applySettings(); }; reader.readAsDataURL(e.target.files[0]); } });
+    logoHeight.addEventListener('input', e => { localStorage.setItem('logoHeight', e.target.value); applySettings(); });
+    mainTitle.addEventListener('blur', e => { localStorage.setItem('mainTitle', e.target.innerText); });
+    fontFamily.addEventListener('change', saveTitleStyles);
+    fontColor.addEventListener('input', saveTitleStyles);
+    fontSize.addEventListener('input', e => { fontSizeValue.innerText = e.target.value; saveTitleStyles(); });
+
+    document.addEventListener('DOMContentLoaded', () => { const today = new Date(); const year = today.getFullYear(); const month = (today.getMonth() + 1).toString().padStart(2, '0'); const day = today.getDate().toString().padStart(2, '0'); dateInput.value = `${year}-${month}-${day}`; document.querySelectorAll('.filter-btn').forEach(b => { b.classList.add('bg-white', 'text-gray-600', 'shadow-sm', 'border', 'border-gray-200', 'hover:bg-gray-50'); }); document.querySelector('.filter-btn[data-filter="equipment"]').classList.add('filter-btn-active'); applySettings(); });
+    </script>
+</body>
+</html>
